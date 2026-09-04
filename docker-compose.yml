@@ -1,0 +1,11 @@
+services:
+  ascent:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: ascent
+    restart: unless-stopped
+    ports:
+      - 3001:3000
+    volumes:
+      - ./data:/app/data
