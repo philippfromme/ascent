@@ -27,12 +27,48 @@ function loadStore() {
   }
 }
 
-let store = loadStore();
-
 function saveStore() {
   const temporaryFile = `${DATA_FILE}.tmp`;
   fs.writeFileSync(temporaryFile, `${JSON.stringify(store, null, 2)}\n`);
   fs.renameSync(temporaryFile, DATA_FILE);
+}
+
+function normalizeHistory(counter) {
+  let changed = false;
+  if (!Array.isArray(counter.history)) {
+    counter.history = [{ type: "created", date: counter.kind === "since" ? counter.startedAt : dateKey(new Date(counter.createdAt || Date.now())) }];
+    changed = true;
+  }
+  if (counter.kind === "streak" && counter.lastCheckIn && !counter.history.some((event) => event.type === "check-in" && event.date === counter.lastCheckIn)) {
+    counter.history.push({ type: "check-in", date: counter.lastCheckIn, migrated: true });
+    changed = true;
+  }
+  const migration = counter.history.find((event) => event.type === "check-in" && event.migrated);
+  if (counter.kind === "streak" && migration && counter.streak > 1) {
+    const lastCheckIn = new Date(`${counter.lastCheckIn}T00:00:00Z`);
+    for (let offset = 1; offset < counter.streak; offset++) {
+      const date = new Date(lastCheckIn);
+      date.setUTCDate(date.getUTCDate() - offset);
+      const key = dateKey(date);
+      if (!counter.history.some((event) => event.type === "check-in" && event.date === key)) {
+        counter.history.push({ type: "check-in", date: key, migrated: true });
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+let store = loadStore();
+let historyMigrated = false;
+for (const counter of store.counters) {
+  historyMigrated = normalizeHistory(counter) || historyMigrated;
+}
+if (historyMigrated) saveStore();
+
+function record(counter, type, extras = {}) {
+  normalizeHistory(counter);
+  counter.history.push({ type, date: todayKey(), ...extras });
 }
 
 function validName(value) {
@@ -94,6 +130,7 @@ app.post("/api/counters", (req, res) => {
   const counter = {
     id: crypto.randomUUID(), name: name.trim(), kind, createdAt: now,
     startedAt: kind === "since" && startedAt ? startedAt : todayKey(), streak: 0, lastCheckIn: null,
+    history: [{ type: "created", date: kind === "since" && startedAt ? startedAt : todayKey() }],
   };
   store.counters.push(counter);
   saveStore();
@@ -108,7 +145,10 @@ app.put("/api/counters/:id", (req, res) => {
     if (!validDateKey(req.body.startedAt) || req.body.startedAt > todayKey()) {
       return res.status(400).json({ error: "Choose a valid start date that is not in the future." });
     }
-    counter.startedAt = req.body.startedAt;
+    if (counter.startedAt !== req.body.startedAt) {
+      record(counter, "start-date-changed", { from: counter.startedAt, to: req.body.startedAt });
+      counter.startedAt = req.body.startedAt;
+    }
   }
   counter.name = req.body.name.trim();
   saveStore();
@@ -123,6 +163,7 @@ app.post("/api/counters/:id/check-in", (req, res) => {
   if (counter.lastCheckIn !== today) {
     counter.streak = counter.lastCheckIn === dateKey(new Date(Date.now() - 86400000)) ? counter.streak + 1 : 1;
     counter.lastCheckIn = today;
+    record(counter, "check-in");
     saveStore();
   }
   res.json({ counter: present(counter) });
@@ -131,8 +172,14 @@ app.post("/api/counters/:id/check-in", (req, res) => {
 app.post("/api/counters/:id/reset", (req, res) => {
   const counter = store.counters.find((item) => item.id === req.params.id);
   if (!counter) return res.status(404).json({ error: "Counter not found." });
-  if (counter.kind === "since") counter.startedAt = todayKey();
-  else { counter.streak = 0; counter.lastCheckIn = null; }
+  if (counter.kind === "since") {
+    record(counter, "reset", { from: counter.startedAt, to: todayKey() });
+    counter.startedAt = todayKey();
+  } else {
+    record(counter, "reset", { previousStreak: counter.streak });
+    counter.streak = 0;
+    counter.lastCheckIn = null;
+  }
   saveStore();
   res.json({ counter: present(counter) });
 });
@@ -146,4 +193,14 @@ app.delete("/api/counters/:id", (req, res) => {
 });
 
 app.get("*splat", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
-app.listen(PORT, () => console.log(`Ascent running at http://localhost:${PORT}`));
+
+const server = app.listen(PORT, () => {
+  // Keep the HTTP listener attached to the Node event loop in every shell environment.
+  server.ref();
+  console.log(`Ascent running at http://localhost:${PORT}`);
+});
+
+server.on("error", (error) => {
+  console.error("Ascent server failed:", error.message);
+  process.exitCode = 1;
+});

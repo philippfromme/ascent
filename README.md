@@ -11,6 +11,12 @@ npm start
 
 Open `http://localhost:3000`.
 
+For local development with automatic restarts after source changes:
+
+```sh
+npm run dev
+```
+
 Ascent stores its counters in `data/counters.json`. Set `DATA_DIR` to keep data elsewhere.
 
 ## Docker

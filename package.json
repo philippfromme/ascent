@@ -4,9 +4,14 @@
   "type": "module",
   "main": "viewer/server.js",
   "scripts": {
-    "start": "node viewer/server.js"
+    "start": "node viewer/server.js",
+    "dev": "nodemon --watch viewer --ext js,html,css --exec node viewer/server.js"
   },
-  "keywords": ["streak", "counter", "self-hosted"],
+  "keywords": [
+    "streak",
+    "counter",
+    "self-hosted"
+  ],
   "author": "Philipp Fromme",
   "license": "MIT",
   "description": "A self-hosted counter for streaks and days since.",
@@ -15,5 +20,8 @@
     "express": "^5.2.1",
     "geist": "^1.7.1",
     "material-symbols": "^0.44.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }
