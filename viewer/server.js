@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 const DATA_FILE = path.join(DATA_DIR, "counters.json");
+const EXAMPLE_DATA_FILE = path.join(DATA_DIR, "counters.example.json");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const PORT = Number(process.env.PORT || 3000);
 
@@ -17,7 +18,16 @@ function emptyStore() {
 }
 
 function loadStore() {
-  if (!fs.existsSync(DATA_FILE)) return emptyStore();
+  if (!fs.existsSync(DATA_FILE)) {
+    if (!fs.existsSync(EXAMPLE_DATA_FILE)) return emptyStore();
+    try {
+      const example = JSON.parse(fs.readFileSync(EXAMPLE_DATA_FILE, "utf8"));
+      return Array.isArray(example?.counters) ? example : emptyStore();
+    } catch (error) {
+      console.error("Could not read example counters:", error.message);
+      return emptyStore();
+    }
+  }
   try {
     const value = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
     return Array.isArray(value?.counters) ? value : emptyStore();
@@ -35,6 +45,10 @@ function saveStore() {
 
 function normalizeHistory(counter) {
   let changed = false;
+  if (typeof counter.recordsSuccess !== "boolean") {
+    counter.recordsSuccess = counter.kind === "streak";
+    changed = true;
+  }
   if (!Array.isArray(counter.history)) {
     counter.history = [{ type: "created", date: counter.kind === "since" ? counter.startedAt : dateKey(new Date(counter.createdAt || Date.now())) }];
     changed = true;
@@ -100,12 +114,37 @@ function dayDistance(from, to = todayKey()) {
   return Math.max(0, Math.floor((end - start) / 86400000));
 }
 
+function streakPeriods(counter) {
+  const checkIns = [...new Set((counter.history || []).filter((event) => event.type === "check-in" && validDateKey(event.date)).map((event) => event.date))].sort();
+  const periods = [];
+  for (const date of checkIns) {
+    const previous = periods.at(-1);
+    if (previous && dayDistance(previous.end, date) === 1) { previous.end = date; previous.days += 1; }
+    else periods.push({ start: date, end: date, days: 1 });
+  }
+  const active = counter.lastCheckIn === todayKey() || counter.lastCheckIn === dateKey(new Date(Date.now() - 86400000));
+  return periods.map((period, index) => ({ ...period, current: active && index === periods.length - 1 }));
+}
+
+function sincePeriods(counter) {
+  let start = (counter.history || []).find((event) => event.type === "created")?.date || counter.startedAt;
+  const periods = [];
+  for (const event of counter.history || []) {
+    if ((event.type === "reset" || event.type === "start-date-changed") && validDateKey(event.to) && validDateKey(event.date)) {
+      periods.push({ start, end: event.date, days: dayDistance(start, event.date), current: false });
+      start = event.to;
+    }
+  }
+  periods.push({ start, end: todayKey(), days: dayDistance(start), current: true });
+  return periods;
+}
+
 function present(counter) {
   if (counter.kind === "since") {
-    return { ...counter, value: dayDistance(counter.startedAt), unit: "days since" };
+    return { ...counter, value: dayDistance(counter.startedAt), unit: "day streak", periods: sincePeriods(counter), recordsSuccess: false };
   }
   const current = counter.lastCheckIn === todayKey() || counter.lastCheckIn === dateKey(new Date(Date.now() - 86400000));
-  return { ...counter, value: current ? counter.streak : 0, unit: "day streak", checkedInToday: counter.lastCheckIn === todayKey() };
+  return { ...counter, value: current ? counter.streak : 0, unit: "day streak", checkedInToday: counter.lastCheckIn === todayKey(), periods: streakPeriods(counter), recordsSuccess: true };
 }
 
 const app = express();
@@ -129,7 +168,7 @@ app.post("/api/counters", (req, res) => {
   const now = new Date().toISOString();
   const counter = {
     id: crypto.randomUUID(), name: name.trim(), kind, createdAt: now,
-    startedAt: kind === "since" && startedAt ? startedAt : todayKey(), streak: 0, lastCheckIn: null,
+    startedAt: kind === "since" && startedAt ? startedAt : todayKey(), streak: 0, lastCheckIn: null, recordsSuccess: kind === "streak",
     history: [{ type: "created", date: kind === "since" && startedAt ? startedAt : todayKey() }],
   };
   store.counters.push(counter);
@@ -169,18 +208,22 @@ app.post("/api/counters/:id/check-in", (req, res) => {
   res.json({ counter: present(counter) });
 });
 
-app.post("/api/counters/:id/reset", (req, res) => {
+app.post("/api/counters/:id/record", (req, res) => {
   const counter = store.counters.find((item) => item.id === req.params.id);
   if (!counter) return res.status(404).json({ error: "Counter not found." });
-  if (counter.kind === "since") {
+  if (counter.recordsSuccess) {
+    const today = todayKey();
+    if (counter.lastCheckIn !== today) {
+      counter.streak = counter.lastCheckIn === dateKey(new Date(Date.now() - 86400000)) ? counter.streak + 1 : 1;
+      counter.lastCheckIn = today;
+      record(counter, "check-in");
+      saveStore();
+    }
+  } else if (counter.startedAt !== todayKey()) {
     record(counter, "reset", { from: counter.startedAt, to: todayKey() });
     counter.startedAt = todayKey();
-  } else {
-    record(counter, "reset", { previousStreak: counter.streak });
-    counter.streak = 0;
-    counter.lastCheckIn = null;
+    saveStore();
   }
-  saveStore();
   res.json({ counter: present(counter) });
 });
 

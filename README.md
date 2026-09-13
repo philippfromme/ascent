@@ -1,6 +1,6 @@
 # Ascent
 
-A small self-hosted tracker for daily streaks and days-since counters.
+A small self-hosted tracker for day streaks.
 
 ## Run locally
 
@@ -17,7 +17,7 @@ For local development with automatic restarts after source changes:
 npm run dev
 ```
 
-Ascent stores its counters in `data/counters.json`. Set `DATA_DIR` to keep data elsewhere.
+On its first run, Ascent loads the sample counters from `data/counters.example.json`. Once you make a change, it stores your counters in `data/counters.json`. Set `DATA_DIR` to keep data elsewhere.
 
 ## Docker
 
