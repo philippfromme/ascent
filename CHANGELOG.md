@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.0
+
+- Confirm Check in and Reset actions before recording them.
+
 ## v0.5.0
 
 - Preserve and display every completed and current streak.
