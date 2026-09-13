@@ -74,11 +74,16 @@ function normalizeHistory(counter) {
 }
 
 let store = loadStore();
-let historyMigrated = false;
-for (const counter of store.counters) {
-  historyMigrated = normalizeHistory(counter) || historyMigrated;
+let storeMigrated = false;
+store.counters.sort((left, right) => (Number.isInteger(left.position) ? left.position : Number.MAX_SAFE_INTEGER) - (Number.isInteger(right.position) ? right.position : Number.MAX_SAFE_INTEGER));
+for (const [index, counter] of store.counters.entries()) {
+  storeMigrated = normalizeHistory(counter) || storeMigrated;
+  if (counter.position !== index) {
+    counter.position = index;
+    storeMigrated = true;
+  }
 }
-if (historyMigrated) saveStore();
+if (storeMigrated) saveStore();
 
 function record(counter, type, extras = {}) {
   normalizeHistory(counter);
@@ -168,7 +173,7 @@ app.post("/api/counters", (req, res) => {
   const now = new Date().toISOString();
   const counter = {
     id: crypto.randomUUID(), name: name.trim(), kind, createdAt: now,
-    startedAt: kind === "since" && startedAt ? startedAt : todayKey(), streak: 0, lastCheckIn: null, recordsSuccess: kind === "streak",
+    startedAt: kind === "since" && startedAt ? startedAt : todayKey(), streak: 0, lastCheckIn: null, recordsSuccess: kind === "streak", position: store.counters.length,
     history: [{ type: "created", date: kind === "since" && startedAt ? startedAt : todayKey() }],
   };
   store.counters.push(counter);
@@ -225,6 +230,20 @@ app.post("/api/counters/:id/record", (req, res) => {
     saveStore();
   }
   res.json({ counter: present(counter) });
+});
+
+app.post("/api/counters/reorder", (req, res) => {
+  const ids = req.body?.ids;
+  if (!Array.isArray(ids) || ids.length !== store.counters.length || new Set(ids).size !== ids.length) {
+    return res.status(400).json({ error: "Provide each counter exactly once." });
+  }
+  const byId = new Map(store.counters.map((counter) => [counter.id, counter]));
+  if (ids.some((id) => typeof id !== "string" || !byId.has(id))) {
+    return res.status(400).json({ error: "The counter order is invalid." });
+  }
+  store.counters = ids.map((id, position) => ({ ...byId.get(id), position }));
+  saveStore();
+  res.json({ counters: store.counters.map(present) });
 });
 
 app.delete("/api/counters/:id", (req, res) => {
