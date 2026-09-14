@@ -30,13 +30,13 @@
       "name": "Alcohol-free",
       "kind": "since",
       "createdAt": "2026-07-01T08:00:00.000Z",
-      "startedAt": "2026-08-30",
+      "startedAt": "2026-08-31",
       "streak": 0,
       "lastCheckIn": null,
       "history": [
         { "type": "created", "date": "2026-07-01" },
         { "type": "reset", "date": "2026-08-01", "from": "2026-07-01", "to": "2026-08-01" },
-        { "type": "reset", "date": "2026-08-30", "from": "2026-08-01", "to": "2026-08-30" }
+        { "type": "reset", "date": "2026-08-31", "from": "2026-08-01", "to": "2026-08-31" }
       ]
     }
   ]

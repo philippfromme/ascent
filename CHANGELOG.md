@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.0
+
+- Use square milestone markers consistent with Ascent's visual language.
+- Distinguish current-streak milestones from milestones reached previously.
+- Update the bundled example data to demonstrate a milestone state.
+
 ## v0.7.0
 
 - Add motivational milestones at 3, 7, 14, 30, 60, 90, 180, and 365 days.
