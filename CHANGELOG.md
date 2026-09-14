@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.0
+
+- Add motivational milestones at 3, 7, 14, 30, 60, 90, 180, and 365 days.
+- Show progress toward the next milestone on overview cards.
+- Add milestone celebrations, a milestone trail, and historical streak badges.
+- Give milestone cards more vertical space while keeping rows aligned.
+
 ## v0.6.0
 
 - Confirm Check in and Reset actions before recording them.
