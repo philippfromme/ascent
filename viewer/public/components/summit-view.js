@@ -40,7 +40,6 @@ class SummitView extends LitElement {
     const facing = points[segment + 1].x >= points[segment].x ? 1 : -1;
     const trail = points.map((point) => `${point.x},${point.y}`).join(" ");
     const reached = [...points.slice(0, Math.floor(height) + 1), climber].map((point) => `${point.x},${point.y}`).join(" ");
-    const next = camps.find((camp) => camp.days > current);
     const rock = Array.from({ length: 23 }, (_, row) => {
       const y = peakY + row * rockStep;
       const half = mountainHalfWidth(y);
@@ -56,7 +55,7 @@ class SummitView extends LitElement {
         ${best > 0 ? svg`<g transform=${`translate(${flag.x} ${flag.y})`}><text class="material-symbols-outlined summit-map-icon" x="-4" y="3" fill="#a0a0a0">flag</text></g>` : ""}
         <g class="summit-climber" style=${`transform:translate(${climber.x}px,${climber.y}px)`}><g transform=${`scale(${facing} 1)`}><text class="material-symbols-outlined summit-map-icon" x="-12" y="2" fill="#00d230">hiking</text></g></g>
       </svg>
-      <div class="summit-caption"><strong>${current} <span>${current === 1 ? "day" : "days"}</span></strong><span>${next ? `${next.days - current} to ${next.label}` : "Summit reached · keep climbing"}</span><small>${best ? `Personal best · ${best} days` : "Your trail starts here"}</small></div>
+      <div class="summit-caption"><div><span>Current</span><strong>${current}<small>d</small></strong></div><div><span>Best</span><strong>${best || "—"}<small>${best ? "d" : ""}</small></strong></div></div>
     </button>`;
   }
   render() {
